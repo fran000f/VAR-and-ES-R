@@ -1,0 +1,578 @@
+---
+title: "Ilościowe miary ryzyka rynkowego"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+```{r rawcode, echo=FALSE}
+library(dplyr)
+library(MTS)
+library(ggplot2)
+dane <- read.csv("dane.csv", header=T, sep=",")
+dane$Date <- as.Date(dane$Date,"%d/%m/%Y")
+BUMIX <- dane[dane$Name=="BUMIX",]
+BUX <-dane[dane$Name=="BUX",]
+CETOP <- dane[dane$Name=="CETOP",]
+df0<-merge(BUX,BUMIX,by="Date")
+df<-merge(df0,CETOP,by="Date")
+df<-na.omit(df)
+
+#stopy logarytmiczne
+
+stoplog<-function(dane){
+  wynik<-c(0)
+  for(i in 1:(length(dane)-1)){
+    
+    stopa<-100*log(dane[i+1]/dane[i])
+    wynik[i]<-stopa
+  }
+  
+  return(wynik)
+}
+
+stopa.cetop<-stoplog(df$Close.price)
+stopa.bux<-stoplog(df$Close.price.x)
+stopa.bumix<-stoplog(df$Close.price.y)
+
+dane1<-df[-1,]
+dane1$stopa.cetop<-as.numeric(stopa.cetop)
+dane1$stopa.bux<-as.numeric(stopa.bux)
+dane1$stopa.bumix<-as.numeric(stopa.bumix)
+dane1<-na.omit(dane1)
+strata_bux<-data.frame(Data=dane1$Date,logreturn=-(dane1$stopa.bux))
+strata_cetop<-data.frame(Data=dane1$Date,logreturn=-(dane1$stopa.cetop))
+strata_bumix<-data.frame(Data=dane1$Date,logreturn=-(dane1$stopa.bumix))
+strata_bux <- strata_bux %>% add_row()  
+strata_bumix <- strata_bumix %>% add_row()
+strata_cetop <- strata_cetop %>% add_row()
+
+
+#deklaracja kolumn
+
+strata_bux$var_99_250 <- NA
+strata_bux$es_99_250 <- NA
+strata_bux$var_95_250<- NA
+strata_bux$es_95_250 <- NA
+strata_bumix$var_99_250 <- NA
+strata_bumix$es_99_250 <- NA
+strata_bumix$var_95_250 <- NA
+strata_bumix$es_95_250 <- NA
+strata_cetop$var_99_250 <- NA
+strata_cetop$es_99_250 <- NA
+strata_cetop$var_95_250 <- NA
+strata_cetop$es_95_250 <- NA
+strata_bux$var_99_250_EWMA <- NA
+strata_bux$es_99_250_EWMA <- NA
+strata_bux$var_95_250_EWMA<- NA
+strata_bux$es_95_250_EWMA <- NA
+strata_bumix$var_99_250_EWMA <- NA
+strata_bumix$es_99_250_EWMA <- NA
+strata_bumix$var_95_250_EWMA<- NA
+strata_bumix$es_95_250_EWMA <- NA
+strata_cetop$var_99_250_EWMA <- NA
+strata_cetop$es_99_250_EWMA <- NA
+strata_cetop$var_95_250_EWMA <- NA
+strata_cetop$es_95_250_EWMA <- NA
+strata_bux$var_99_250_mc <- NA
+strata_bux$es_99_250_mc <- NA
+strata_bux$var_95_250_mc<- NA
+strata_bux$es_95_250_mc <- NA
+strata_bumix$var_99_250_mc <- NA
+strata_bumix$es_99_250_mc <- NA
+strata_bumix$var_95_250_mc<- NA
+strata_bumix$es_95_250_mc <- NA
+strata_cetop$var_99_250_mc <- NA
+strata_cetop$es_99_250_mc <- NA
+strata_cetop$var_95_250_mc <- NA
+strata_cetop$es_95_250_mc <- NA
+strata_bux$test1 <- NA
+strata_bux$test2 <- NA
+strata_bux$test3 <- NA
+strata_bumix$test1 <- NA
+strata_bumix$test2 <- NA
+strata_bumix$test3 <- NA
+strata_cetop$test1 <- NA
+strata_cetop$test2 <- NA
+strata_cetop$test3 <- NA
+
+
+#metoda historyczna
+
+for (i in seq(1,nrow(strata_bux)-250,1)){
+  probka <- strata_bux[i:(249+i),]
+  kwantyl_99 <- quantile(probka$logreturn, 0.99, na.rm = T)
+  kwantyl_95 <- quantile(probka$logreturn, 0.95, na.rm = T)
+  strata_bux$var_99_250[250+i] <- kwantyl_99
+  strata_bux$var_95_250[250+i] <- kwantyl_95
+  probka_99 <- probka %>% filter(logreturn > kwantyl_99)
+  w_99 = mean(probka_99$logreturn)
+  strata_bux$es_99_250[250+i] <- w_99
+  probka_95 <- probka %>% filter(logreturn > kwantyl_95)
+  w_95 = mean(probka_95$logreturn)
+  strata_bux$es_95_250[250+i] <- w_95
+}
+
+for (i in seq(1,nrow(strata_bumix)-250,1)){
+  probka <- strata_bumix[i:(249+i),]
+  kwantyl_99 <- quantile(probka$logreturn, 0.99, na.rm = T)
+  kwantyl_95 <- quantile(probka$logreturn, 0.95, na.rm = T)
+  strata_bumix$var_99_250[250+i] <- kwantyl_99
+  strata_bumix$var_95_250[250+i] <- kwantyl_95
+  probka_99 <- probka %>% filter(logreturn > kwantyl_99)
+  w_99 = mean(probka_99$logreturn)
+  strata_bumix$es_99_250[250+i] <- w_99
+  probka_95 <- probka %>% filter(logreturn > kwantyl_95)
+  w_95 = mean(probka_95$logreturn)
+  strata_bumix$es_95_250[250+i] <- w_95
+}
+
+for (i in seq(1,nrow(strata_cetop)-250,1)){
+  probka <- strata_cetop[i:(249+i),]
+  kwantyl_99 <- quantile(probka$logreturn, 0.99, na.rm = T)
+  kwantyl_95 <- quantile(probka$logreturn, 0.95, na.rm = T)
+  strata_cetop$var_99_250[250+i] <- kwantyl_99
+  strata_cetop$var_95_250[250+i] <- kwantyl_95
+  probka_99 <- probka %>% filter(logreturn > kwantyl_99)
+  w_99 = mean(probka_99$logreturn)
+  strata_cetop$es_99_250[250+i] <- w_99
+  probka_95 <- probka %>% filter(logreturn > kwantyl_95)
+  w_95 = mean(probka_95$logreturn)
+  strata_cetop$es_95_250[250+i] <- w_95
+}
+
+
+# EWMA
+
+for (i in seq(1,nrow(strata_bux)-250,1)){
+  probka <- strata_bux[i:(249+i),]
+  probka$vol<-EWMAvol(probka$logreturn, lambda=0.999)$Sigma.t
+  probka<-probka %>% mutate(Z = logreturn * lead(vol)/vol)
+  kwantyl_99<-quantile(probka$Z, .99, na.rm = T)
+  kwantyl_95<-quantile(probka$Z, .95, na.rm=T)
+  strata_bux$var_99_250_EWMA[250+i] <- kwantyl_99
+  strata_bux$var_95_250_EWMA[250+i] <- kwantyl_95
+  probka2 <- probka %>% filter(Z > kwantyl_99)
+  w_99 = mean(probka2$Z)
+  strata_bux$es_99_250_EWMA[250+i] <- w_99
+  probka3 <- probka %>% filter(Z > kwantyl_95)
+  w_95 = mean(probka3$Z)
+  strata_bux$es_95_250_EWMA[250+i] <- w_95
+}
+
+for (i in seq(1,nrow(strata_bumix)-250,1)){
+  probka <- strata_bumix[i:(249+i),]
+  probka$vol<-EWMAvol(probka$logreturn, lambda=0.999)$Sigma.t
+  probka<-probka %>% mutate(Z = logreturn * lead(vol)/vol)
+  kwantyl_99<-quantile(probka$Z, .99, na.rm = T)
+  kwantyl_95<-quantile(probka$Z, .95, na.rm=T)
+  strata_bumix$var_99_250_EWMA[250+i] <- kwantyl_99
+  strata_bumix$var_95_250_EWMA[250+i] <- kwantyl_95
+  probka2 <- probka %>% filter(Z > kwantyl_99)
+  w_99 = mean(probka2$Z)
+  strata_bumix$es_99_250_EWMA[250+i] <- w_99
+  probka3 <- probka %>% filter(Z > kwantyl_95)
+  w_95 = mean(probka3$Z)
+  strata_bumix$es_95_250_EWMA[250+i] <- w_95
+}
+
+for (i in seq(1,nrow(strata_cetop)-250,1)){
+  probka <- strata_cetop[i:(249+i),]
+  probka$vol<-EWMAvol(probka$logreturn, lambda=0.999)$Sigma.t
+  probka<-probka %>% mutate(Z = logreturn * lead(vol)/vol)
+  kwantyl_99<-quantile(probka$Z, .99, na.rm = T)
+  kwantyl_95<-quantile(probka$Z, .95, na.rm= T)
+  strata_cetop$var_99_250_EWMA[250+i] <- kwantyl_99
+  strata_cetop$var_95_250_EWMA[250+i] <- kwantyl_95
+  probka2 <- probka %>% filter(Z > kwantyl_99)
+  w_99 = mean(probka2$Z)
+  strata_cetop$es_99_250_EWMA[250+i] <- w_99
+  probka3 <- probka %>% filter(Z > kwantyl_95)
+  w_95 = mean(probka3$Z)
+  strata_cetop$es_95_250_EWMA[250+i] <- w_95
+}
+
+
+# Monte Carlo
+
+for (i in seq(1,nrow(strata_bux)-250,1)){
+  probka <- strata_bux[i:(249+i),]
+  m = mean(probka$logreturn)
+  sd = sd(probka$logreturn)
+  mcarlo <- rnorm(1000,mean=m, sd=sd)
+  mcarlo      <- sort(mcarlo)                 
+  M0          <- floor(1000*0.95)
+  M1 <- floor(1000*0.99)                                
+  var_95   <- mcarlo[M0]                  
+  es_95     <- mean(mcarlo[1:M0])  
+  var_99 <-mcarlo[M1]
+  es_99 <-mean(mcarlo[1:M1])
+  strata_bux$var_99_250_mc[250+i] <- var_99
+  strata_bux$var_95_250_mc[250+i] <- var_95
+  strata_bux$es_99_250_mc[250+i] <- es_99
+  strata_bux$es_95_250_mc[250+i] <- es_95
+}
+
+for (i in seq(1,nrow(strata_bumix)-250,1)){
+  probka <- strata_bumix[i:(249+i),]
+  m = mean(probka$logreturn)
+  sd = sd(probka$logreturn)
+  mcarlo <- rnorm(1000,mean=m, sd=sd)
+  mcarlo      <- sort(mcarlo)                 
+  M0          <- floor(1000*0.95)
+  M1 <- floor(1000*0.99)                                
+  var_95   <- mcarlo[M0]                  
+  es_95     <- mean(mcarlo[1:M0])  
+  var_99 <-mcarlo[M1]
+  es_99 <-mean(mcarlo[1:M1])
+  strata_bumix$var_99_250_mc[250+i] <- var_99
+  strata_bumix$var_95_250_mc[250+i] <- var_95
+  strata_bumix$es_99_250_mc[250+i] <- es_99
+  strata_bumix$es_95_250_mc[250+i] <- es_95
+}
+
+for (i in seq(1,nrow(strata_cetop)-250,1)){
+  probka <- strata_cetop[i:(249+i),]
+  m = mean(probka$logreturn)
+  sd = sd(probka$logreturn)
+  mcarlo <- rnorm(1:1000,mean=m, sd=sd)
+  mcarlo      <- sort(mcarlo)                 
+  M0          <- floor(1000*0.95)
+  M1 <- floor(1000*0.99)                                
+  var_95   <- mcarlo[M0]                  
+  es_95     <- mean(mcarlo[1:M0])  
+  var_99 <-mcarlo[M1]
+  es_99 <-mean(mcarlo[1:M1])
+  strata_cetop$var_99_250_mc[250+i] <- var_99
+  strata_cetop$var_95_250_mc[250+i] <- var_95
+  strata_cetop$es_99_250_mc[250+i] <- es_99
+  strata_cetop$es_95_250_mc[250+i] <- es_95
+}
+
+
+#sprawdzanie wyjątków
+
+for (i in seq(251,3983,1)) {
+  if (-strata_bux$logreturn[i]>strata_bux$var_99_250[i])
+  {strata_bux$test1[i]=strata_bux$logreturn[i]}
+  else {strata_bux$test1[i]=0}
+  
+  if (-strata_bux$logreturn[i]>strata_bux$var_99_250_EWMA[i])
+  {strata_bux$test2[i]=strata_bux$logreturn[i]}
+  else {strata_bux$test2[i]=0}
+  
+  if (-strata_bux$logreturn[i]>strata_bux$var_99_250_mc[i])
+  {strata_bux$test3[i]=strata_bux$logreturn[i]}
+  else {strata_bux$test3[i]=0}
+}
+
+for (i in seq(251,3983,1)) {
+  if (-strata_bumix$logreturn[i]>strata_bumix$var_99_250[i])
+  {strata_bumix$test1[i]=strata_bumix$logreturn[i]}
+  else {strata_bumix$test1[i]=0}
+  
+  if (-strata_bumix$logreturn[i]>strata_bumix$var_99_250_EWMA[i])
+  {strata_bumix$test2[i]=strata_bumix$logreturn[i]}
+  else {strata_bumix$test2[i]=0}
+  
+  if (-strata_bumix$logreturn[i]>strata_bumix$var_99_250_mc[i])
+  {strata_bumix$test3[i]=strata_bumix$logreturn[i]}
+  else {strata_bumix$test3[i]=0}
+}
+
+for (i in seq(251,3983,1)) {
+  if (-strata_cetop$logreturn[i]>strata_cetop$var_99_250[i])
+  {strata_cetop$test1[i]=strata_cetop$logreturn[i]}
+  else {strata_cetop$test1[i]=0}
+  
+  if (-strata_cetop$logreturn[i]>strata_cetop$var_99_250_EWMA[i])
+  {strata_cetop$test2[i]=strata_cetop$logreturn[i]}
+  else {strata_cetop$test2[i]=0}
+  
+  if (-strata_cetop$logreturn[i]>strata_cetop$var_99_250_mc[i])
+  {strata_cetop$test3[i]=strata_cetop$logreturn[i]}
+  else {strata_cetop$test3[i]=0}
+}
+
+df_bux <- na.omit(strata_bux[251:(nrow(strata_bux)),])
+df_cetop <- na.omit(strata_cetop[251:(nrow(strata_cetop)),])
+df_bumix <- na.omit(strata_bumix[251:(nrow(strata_bumix)),])
+
+#testy dla 99% pewności
+
+kupiec <- function(excepts){
+  n=length(excepts)-1
+  m=sum(excepts!=0)
+  wartosc=2*log((1-m/n)^(n-m)*(m/n)^m)-2*log((1-0.01)^(n-m)*0.01^m)  
+  p <- 1-pchisq(q=wartosc, df=1)
+  statystyki <- data.frame(wartosc,p)
+  return(statystyki)
+}
+
+christof <- function(excepts){
+  n00=0
+  n01=0
+  n10=0
+  n11=0
+  for(i in seq(length(excepts)-2)){
+    if(excepts[i] ==0){
+      if(excepts[i+1] ==0) {n00=n00+1}
+      else {n01=n01+1}
+    }
+    
+    if(excepts[i] !=0){
+      if(excepts[i+1] ==0) {n10=n10+1}
+      else {n11=n11+1}
+    }
+  }
+  
+  pi01=n01/(n00+n01)
+  pi11=n11/(n10+n11)
+  pi=(n01+n11) /(n00+n01+n10+n11)
+  wartosc=2*log  ((1-pi01)^(n00) *pi01^n01*(1-pi11)^(n10) *pi11^n11) -2*log((1-pi)^(n00+n10) *pi^(n01+n11))
+  p <- 1-pchisq(q=wartosc, df=1)
+  statystyki <- data.frame(wartosc,p)
+  return(statystyki)
+}
+
+test_bux <- rbind(kupiec(df_bux$test1),christof(df_bux$test1),
+                  kupiec(df_bux$test2),christof(df_bux$test2),
+                  kupiec(df_bux$test3),christof(df_bux$test3),
+                  deparse.level=4)
+test_bumix <- rbind(kupiec(df_bumix$test1),christof(df_bumix$test1),
+                    kupiec(df_bumix$test2),christof(df_bumix$test2),
+                    kupiec(df_bumix$test3),christof(df_bumix$test3),
+                    deparse.level=4)
+test_cetop <- rbind(kupiec(df_cetop$test1),christof(df_cetop$test1),
+                    kupiec(df_cetop$test2),christof(df_cetop$test2),
+                    kupiec(df_cetop$test3),christof(df_cetop$test3),
+                    deparse.level=4)
+
+```
+
+# Opis danych
+
+Zebrane dane dzienne z okresu 01.01.2006 - 31.12.2021 dotyczą wartości trzech indeksów giełdowych - BUX, BUMIX oraz CETOP i pochodzą z archiwów Giełdy Papierów Wartościowych w Budapeszcie (BSE).
+
+<div>
+
+**BUX** składa się z 12 do 25 największych spółek notowanych na BSE. Jest odpowiednikiem indeksów takich jak Dow Jones Industrial Average czy DAX. Indeks BUX jest składnikiem opcji i kontraktów futures notowanych na BSE pod symbolem BUX. Wartość indeksu obliczana jest w czasie rzeczywistym na podstawie kursów rynkowych akcji w koszyku. Oprócz kursów akcji uwzględnia on również prawa poboru i dywidendy. Dzienne zmiany wartości indeksu przedstawia poniższy wykres:
+
+```{r echo=FALSE}
+plot(df$Date,df$Close.price.x,xlab="Data",ylab="BUX",type="l")
+
+```
+
+Rozkład gęstości logarytmicznych stóp zwrotu wygląda następująco:
+
+```{r echo=FALSE}
+plot(density(df_bux$logreturn))
+
+```
+
+Można zatem stwierdzić, że rozkład ten w przybliżeniu przypomina rozkład normalny.
+
+Przeciętna wartość indeksu odnotowana w badanym okresie wyniosła `r mean(df$Close.price.x)` z odchyleniem standardowym `r sd(df$Close.price.x)`. Współczynnik zmienności wynosi `r sd(df$Close.price.x) / mean(df$Close.price.x)` i świadczy o umiarkowanej zmienności odnotowanych wartości indeksu. Zakres odnotowanych wartości to (`r min(df$Close.price.x)` - `r max(df$Close.price.x)`). Pierwszy kwantyl wynosi `r quantile(df$Close.price.x, 0.25)`, mediana - `r quantile(df$Close.price.x, 0.5)` , a trzeci kwartyl - `r quantile(df$Close.price.x, 0.75)`.
+
+</div>
+
+------------------------------------------------------------------------
+
+<div>
+
+**BUMIX** składa się z 12 do 25 średniej wielkości spółek notowanych na BSE. Spółki uwzględniane w indeksie BUMIX nie mogą przekroczyć kwoty kapitalizacji 125 miliardów forintów. Podobnie jak BUX, BUMIX jest indeksem dochodowym. W badanym okresie wartość indeksu prezentowała się następująco:
+
+```{r echo=FALSE}
+plot(df$Date,df$Close.price.y,xlab="Data",ylab="BUMIX",type="l")
+
+```
+
+Rozkład gęstości logarytmicznych stóp zwrotu wygląda następująco:
+
+```{r echo=FALSE}
+plot(density(df_bumix$logreturn))
+
+```
+
+Można zatem stwierdzić, że rozkład ten w przybliżeniu przypomina rozkład normalny.
+
+Przeciętna wartość indeksu odnotowana w badanym okresie wyniosła `r mean(df$Close.price.y)` z odchyleniem standardowym `r sd(df$Close.price.y)`. Współczynnik zmienności wynosi `r sd(df$Close.price.y) / mean(df$Close.price.y)` i świadczy o umiarkowanie wysokiej zmienności odnotowanych wartości indeksu. Zakres odnotowanych wartości to (`r min(df$Close.price.y)` - `r max(df$Close.price.y)`). Pierwszy kwantyl wynosi `r quantile(df$Close.price.y,0.25)`, mediana - `r quantile(df$Close.price.y,0.5)` , a trzeci kwartyl - `r quantile(df$Close.price.y,0.75)`.
+
+</div>
+
+------------------------------------------------------------------------
+
+<div>
+
+**CETOP** (Central European Blue Chip Index) odzwierciedla status spółek o największej wartości rynkowej i obrotach w regionie Europy Środkowej. W jego skład wchodzą notowania m.in. KGHM, PZU czy PKN Orlen. W badanym okresie odnotowano następujące wartości indeksu:
+
+```{r echo=FALSE}
+plot(df$Date,df$Close.price,xlab="Data",ylab="CETOP",type="l")
+
+```
+
+Rozkład gęstości logarytmicznych stóp zwrotu wygląda następująco:
+
+```{r echo=FALSE}
+plot(density(df_cetop$logreturn))
+
+```
+
+Można zatem stwierdzić, że rozkład ten w przybliżeniu przypomina rozkład normalny, aczkolwiek wydaje się odbiegać od niego nieco silniej niż dwa powyższe.
+
+Przeciętna wartość indeksu odnotowana w badanym okresie wyniosła `r mean(df$Close.price)` z odchyleniem standardowym `r sd(df$Close.price)`. Współczynnik zmienności wynosi `r sd(df$Close.price) / mean(df$Close.price)` i świadczy o przeciętnej zmienności odnotowanych wartości indeksu. Zakres odnotowanych wartości to (`r min(df$Close.price)` - `r max(df$Close.price)`). Pierwszy kwantyl wynosi `r quantile(df$Close.price,0.25)`, mediana - `r quantile(df$Close.price,0.5)` , a trzeci kwartyl - `r quantile(df$Close.price,0.75)`.
+
+</div>
+
+## ---------------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+# Wyznaczanie 95% i 99% VaR i ES
+
+W celu wyznaczenia 95% i 99% VaR i ES dla badanych indeksów użyto metod: historycznej, EWMA oraz symulacji Monte Carlo.
+
+```{r echo=FALSE}
+plot_hist_bux<-ggplot(strata_bux, aes(x=Data))+
+  geom_line(aes(y=es_99_250, colour="ES 99%"))+
+  geom_line(aes(y=var_99_250, colour="VaR 99%"))+
+  geom_line(aes(y=es_95_250, colour="ES 95%"))+
+  geom_line(aes(y=var_95_250, colour="VaR 95%"))
+
+plot_hist_bumix<-ggplot(strata_bumix, aes(x=Data))+
+  geom_line(aes(y=es_99_250, colour="ES 99%"))+
+  geom_line(aes(y=var_99_250, colour="VaR 99%"))+
+  geom_line(aes(y=es_95_250, colour="ES 95%"))+
+  geom_line(aes(y=var_95_250, colour="VaR 95%"))
+
+plot_hist_cetop<-ggplot(strata_cetop, aes(x=Data))+
+  geom_line(aes(y=es_99_250, colour="ES 99%"))+
+  geom_line(aes(y=var_99_250, colour="VaR 99%"))+
+  geom_line(aes(y=es_95_250, colour="ES 95%"))+
+  geom_line(aes(y=var_95_250, colour="VaR 95%"))
+
+plot_ewma_bux<-ggplot(strata_bux, aes(x=Data))+
+  geom_line(aes(y=es_99_250_EWMA, colour="ES 99%"))+
+  geom_line(aes(y=var_99_250_EWMA, colour="VaR 99%"))+
+  geom_line(aes(y=es_95_250_EWMA, colour="ES 95%"))+
+  geom_line(aes(y=var_95_250_EWMA, colour="VaR 95%"))
+
+plot_ewma_bumix<-ggplot(strata_bumix, aes(x=Data))+
+  geom_line(aes(y=es_99_250_EWMA, colour="ES 99%"))+
+  geom_line(aes(y=var_99_250_EWMA, colour="VaR 99%"))+
+  geom_line(aes(y=es_95_250_EWMA, colour="ES 95%"))+
+  geom_line(aes(y=var_95_250_EWMA, colour="VaR 95%"))
+
+plot_ewma_cetop<-ggplot(strata_cetop, aes(x=Data))+
+  geom_line(aes(y=es_99_250_EWMA, colour="ES 99%"))+
+  geom_line(aes(y=var_99_250_EWMA, colour="VaR 99%"))+
+  geom_line(aes(y=es_95_250_EWMA, colour="ES 95%"))+
+  geom_line(aes(y=var_95_250_EWMA, colour="VaR 95%"))
+
+plot_mc_bux<-ggplot(strata_bux, aes(x=Data))+
+  geom_line(aes(y=es_99_250_mc, colour="ES 99%"))+
+  geom_line(aes(y=var_99_250_mc, colour="VaR 99%"))+
+  geom_line(aes(y=es_95_250_mc, colour="ES 95%"))+
+  geom_line(aes(y=var_95_250_mc, colour="VaR 95%"))
+
+plot_mc_bumix<-ggplot(strata_bumix, aes(x=Data))+
+  geom_line(aes(y=es_99_250_mc, colour="ES 99%"))+
+  geom_line(aes(y=var_99_250_mc, colour="VaR 99%"))+
+  geom_line(aes(y=es_95_250_mc, colour="ES 95%"))+
+  geom_line(aes(y=var_95_250_mc, colour="VaR 95%"))
+
+plot_mc_cetop<-ggplot(strata_cetop, aes(x=Data))+
+  geom_line(aes(y=es_99_250_mc, colour="ES 99%"))+
+  geom_line(aes(y=var_99_250_mc, colour="VaR 99%"))+
+  geom_line(aes(y=es_95_250_mc, colour="ES 95%"))+
+  geom_line(aes(y=var_95_250_mc, colour="VaR 95%"))
+
+```
+
+## Metoda historyczna
+
+-   indeks BUX
+
+    ```{r echo=FALSE}
+    plot_hist_bux
+    ```
+
+-   indeks BUMIX
+
+    ```{r echo=FALSE}
+    plot_hist_bumix
+    ```
+
+-   indeks CETOP
+
+    ```{r echo=FALSE}
+    plot_hist_cetop
+    ```
+
+## Metoda zmiennej zmienności w czasie (EWMA)
+
+-   indeks BUX
+
+    ```{r echo=FALSE}
+    plot_ewma_bux
+    ```
+
+-   indeks BUMIX
+
+    ```{r echo=FALSE}
+    plot_ewma_bumix
+    ```
+
+-   indeks CETOP
+
+    ```{r echo=FALSE}
+    plot_ewma_cetop
+    ```
+
+## Metoda symulacji Monte Carlo (liczba symulacji: 1000)
+
+-   indeks BUX
+
+    ```{r echo=FALSE}
+    plot_mc_bux
+    ```
+
+-   indeks BUMIX
+
+    ```{r echo=FALSE}
+    plot_mc_bumix
+    ```
+
+-   indeks CETOP
+
+    ```{r echo=FALSE}
+    plot_mc_cetop
+    ```
+
+## ---------------------------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+# Testy wsteczne
+
+Dla obliczonych wartości 99% VaR użyto testów: Kupca oraz Christoffersona. Wyniki testów przedstawia poniższa tabela:
+
+| indeks | metoda      | test Kupca          | p                   | test Christoffersona | p                   |
+|--------|-------------|---------------------|---------------------|----------------------|---------------------|
+| BUX    | historyczna | `r test_bux[1,1]`   | `r test_bux[1,2]`   | `r test_bux[2,1]`    | `r test_bux[2,2]`   |
+| BUX    | EWMA        | `r test_bux[3,1]`   | `r test_bux[3,2]`   | `r test_bux[4,1]`    | `r test_bux[4,2]`   |
+| BUX    | Monte Carlo | `r test_bux[5,1]`   | `r test_bux[5,2]`   | `r test_bux[6,1]`    | `r test_bux[6,2]`   |
+| BUMIX  | historyczna | `r test_bumix[1,1]` | `r test_bumix[1,2]` | `r test_bumix[2,1]`  | `r test_bumix[2,2]` |
+| BUMIX  | EWMA        | `r test_bumix[3,1]` | `r test_bumix[3,2]` | `r test_bumix[4,1]`  | `r test_bumix[4,2]` |
+| BUMIX  | Monte Carlo | `r test_bumix[5,1]` | `r test_bumix[5,2]` | `r test_bumix[6,1]`  | `r test_bumix[6,2]` |
+| CETOP  | historyczna | `r test_cetop[1,1]` | `r test_cetop[1,2]` | `r test_cetop[2,1]`  | `r test_cetop[2,2]` |
+| CETOP  | EWMA        | `r test_cetop[3,1]` | `r test_cetop[3,2]` | `r test_cetop[4,1]`  | `r test_cetop[4,2]` |
+| CETOP  | Monte Carlo | `r test_cetop[5,1]` | `r test_cetop[5,2]` | `r test_cetop[6,1]`  | `r test_cetop[6,2]` |
+
+Na przyjętym poziomie istotności najbardziej wiarygodne wyniki wydaje się dawać metoda symulacji Monte Carlo. Test Kupca odrzuca wiarygodność estymacji metodami historycznymi i EWMA dla indeksu BUX oraz wyniki wszystkich sprawdzonych metod dla indeksu CETOP; p dla metody Monte Carlo jest w tym przypadku najmniejsze. Potwierdza on z kolei wiarygodność wszystkich estymacji dla indeksu BUMIX. Test Christoffersona wskazuje na niezależność przekroczeń VaR w czasie dla wszystkich estymacji indeksów BUMIX oraz BUX. Otrzymanie wiarygodnych wyników dla wszystkich indeksów wymagałoby zmiany poziomu istotności, bądź korekty metody estymacji ze względu na kształt rozkładu logarytmicznych stóp zwrotu.
+
+Na podstawie metody symulacji Monte Carlo można stwierdzić, że w okresie od 01.01.2006 do 31.12.2021 przeciętna wartość narażona na ryzyko dla 99% poziomu pewności dla indeksu BUX wynosiła `r mean(strata_bux$var_99_250_mc, na.rm=T)`, a przeciętna strata po przekroczeniu tej wartości wynosiła `r mean(strata_bux$es_99_250_mc, na.rm=T)`. Dla indeksu BUMIX było to odpowiednio `r mean(strata_bumix$var_99_250_mc, na.rm=T)` i `r mean(strata_bumix$es_99_250_mc, na.rm=T)`. Dla indeksu CETOP było to odpowiednio `r mean(strata_cetop$var_99_250_mc, na.rm=T)` i `r mean(strata_cetop$es_99_250_mc, na.rm=T)`.
